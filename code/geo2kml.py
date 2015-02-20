@@ -1,7 +1,7 @@
 '''
-geo2kml+.py 
+geo2kml.py 
 By: @joeyklee
-About: geo2kml+ is a python script that coverts a csv (with lat/lon coordinates), a point shapefile, 
+About: geo2kml is a python script that coverts a csv (with lat/lon coordinates), a point shapefile, 
 or polygon shapefile to a kml file, extruding each polygon feature by a specified attribute to highlight
 a variable of interest. The lat/lon coordinates of the CSV and the shapefiles should be in 
 WGS 84 (EPSG:4236).  This was inspired by work being done in the urban climate community visualizing 
@@ -32,7 +32,6 @@ import sys
 def f2hex(f2rgb, f):
     rgb = f2rgb.to_rgba(f)[:3]
     return '#%02x%02x%02x' % tuple([255*fc for fc in rgb])
-
 
 # Data Filtering/Prep 
 def makedata(ifile, zfield, *args):
@@ -72,13 +71,18 @@ def makedata(ifile, zfield, *args):
 def geo2kml(ifile, zfield, ofile, inflate=1):
 	# Create empty KML object
 	kml = simplekml.Kml()
+	# define zmin and max
+	zmin = ifile[zfield].min()
+	zmax= ifile[zfield].max()
+	# zeroplane
+	zeroplane = (zmin-25)
 	# Select the zfield from which to extrude
-	altitude = [[i*inflate] for i in ifile[zfield]] 
+	altitude = [[i*inflate]- zeroplane for i in ifile[zfield]] 
 	# norm = colors.Normalize(vmin=380, vmax=600)
-	norm = colors.Normalize(vmin=ifile[zfield].min(), vmax=ifile[zfield].max())
+	norm = colors.Normalize(vmin=(zmin*inflate)-zeroplane, vmax=zmax*inflate-zeroplane)
 	f2rgb = cm.ScalarMappable(norm=norm, cmap=cm.get_cmap('YlOrRd')) #RdYlGn'
 	a_color = [f2hex(f2rgb, i[0]) for i in altitude]
-	a_color_alpha = [simplekml.Color.hex(i[1:]) for i in a_color]
+	# a_color_alpha = [simplekml.Color.hex(i[1:]) for i in a_color]
 
 	# Create list of coordinates for each polygon
 	polycoords = []
@@ -96,26 +100,34 @@ def geo2kml(ifile, zfield, ofile, inflate=1):
 		pol.altitudemode = simplekml.AltitudeMode.relativetoground
 		pol.style.polystyle.fill = 1
 		pol.style.polystyle.outline = 0
-		# pol.style.polystyle.color = simplekml.Color.hex(a_color[i][1:])
-		pol.style.polystyle.color = simplekml.Color.changealpha('80', a_color_alpha[i])
+		pol.style.polystyle.color = simplekml.Color.hex(a_color[i][1:])
+		# pol.style.polystyle.color = simplekml.Color.changealpha('80', a_color_alpha[i])
 		pol.extrude = 1
 
-	# add a legend
-	legendimg = 'http://ibis.geog.ubc.ca/~achristn/images/mobile_co2_legend_small.gif'
-	screen = kml.newscreenoverlay(name='ScreenOverlay')
-	screen.icon.href = legendimg
-	screen.overlayxy = simplekml.OverlayXY(x=0,y=0,xunits=simplekml.Units.fraction,
-	                                       yunits=simplekml.Units.fraction)
-	screen.screenxy = simplekml.ScreenXY(x=25,y=95,xunits=simplekml.Units.pixel,
-	                                     yunits=simplekml.Units.pixel)
-	screen.size.x = 56
-	screen.size.y = 355
-	screen.size.xunits = simplekml.Units.pixel
-	screen.size.yunits = simplekml.Units.pixel
+	#add a legend
+	def addlegend(legendurl, imgx, imgy):
+		screen = kml.newscreenoverlay(name='ScreenOverlay')
+		screen.icon.href = legendurl
+		screen.overlayxy = simplekml.OverlayXY(x=0,y=0,xunits=simplekml.Units.fraction,
+		                                       yunits=simplekml.Units.fraction)
+		screen.screenxy = simplekml.ScreenXY(x=25,y=95,xunits=simplekml.Units.pixel,
+		                                     yunits=simplekml.Units.pixel)
+		screen.size.x = imgx
+		screen.size.y = imgy
+		screen.size.xunits = simplekml.Units.pixel
+		screen.size.yunits = simplekml.Units.pixel
+		return screen
 
-	
-	kml.save(ofile)
-	print "process complete!"
+	if legendurl:
+		addlegend(legendurl, imgx, imgy)
+		kml.save(ofile)
+		print "process complete!"
+	else:
+		kml.save(ofile)
+		print "process complete!"
+
+	# kml.save(ofile)
+	# print "process complete!"
 
 def main():
 	# --- uncomment For shapefiles --- #
@@ -127,25 +139,39 @@ def main():
 
 
 if __name__ == '__main__':
-	# --- Csv test --- #
-	ifile = '/Users/Jozo/Dropbox/projects/webpage/pyGeo/geo2kml+/example/csv/140911141741_filtered.csv'
-	zfield = 'CO2ppm'
-	lon = 'GPSLondeg'
-	lat = 'GPSLatdeg'
-	# ofile = '/Users/Jozo/Dropbox/projects/webpage/pyGeo/geo2kml+/example/csv/test.kml'
-	ofile = ifile[:-4]+".kml"
+	# --- add legend info if available --- #
+	legendurl = 'http://ibis.geog.ubc.ca/~achristn/images/mobile_co2_legend_small.gif'
+	imgx = 56
+	imgy = 355
 
+	# --- Csv test --- #
+	# ifile = '/Users/Jozo/Dropbox/projects/webpage/pyGeo/geo2kml/example/csv/140911141741_filtered.csv'
+	# zfield = 'CO2ppm'
+	# lon = 'GPSLondeg'
+	# lat = 'GPSLatdeg'
+	
 	# # --- shp test --- #
 	# ifile = '/Users/Jozo/Dropbox/projects/webpage/pyGeo/geo2kml+/example/pointshp/example.shp'
 	# zfield = 'altitude'
-	# ofile = '/Users/Jozo/Dropbox/projects/webpage/pyGeo/geo2kml+/example/pointshp/example.kml'
+	# lon = None
+	# lat = None
 
 	# --- shp test2 --- #
-	# ifile = '/Users/Jozo/Dropbox/projects/webpage/pyGeo/geo2kml+/example/polygonshp/test.shp'
+	# ifile = '/Users/Jozo/Dropbox/projects/webpage/pyGeo/geo2kml/example/polygonshp/test.shp'
 	# zfield = 'MAXCo2_ppm'
-	# ofile = '/Users/Jozo/Dropbox/projects/webpage/pyGeo/geo2kml+/example/polygonshp/test.kml'
+	# lon = None
+	# lat = None
 
+	# --- call from terminal --- #
+	# for csv: python geo2kml.py '../example/csv/140911141741_filtered.csv' 'CO2ppm' 'GPSLondeg' 'GPSLatdeg'
+	# for point: python geo2kml.py '../example/pointshp/example.shp' 'altitude' None None
+	# for polygon: python geo2kml.py '../example/polygonshp/test.shp' 'MAXCo2_ppm' None None
+	ifile = sys.argv[1:][0]
+	zfield = sys.argv[1:][1]
+	lon = sys.argv[1:][2]
+	lat = sys.argv[1:][3]
 
+	ofile = ifile[:-4]+".kml"
 	# Run main()
 	main()
 
